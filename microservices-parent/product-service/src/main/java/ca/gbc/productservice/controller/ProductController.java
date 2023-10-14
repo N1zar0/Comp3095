@@ -1,8 +1,9 @@
 package ca.gbc.productservice.controller;
 
+
 import ca.gbc.productservice.dto.ProductRequest;
 import ca.gbc.productservice.dto.ProductResponse;
-import ca.gbc.productservice.service.ProductServiceImpl;
+import ca.gbc.productservice.services.ProductServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -14,7 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/product")
 @RequiredArgsConstructor
-public class ProductController {
+public class ProductController{
 
     private final ProductServiceImpl productService;
 
@@ -30,50 +31,20 @@ public class ProductController {
         return productService.getAllProducts();
     }
 
-    @PutMapping({"/{productId}"})
+    @PutMapping("/{productId}")
     public ResponseEntity<?> updateProduct(@PathVariable("productId") String productId,
-                                           @RequestBody ProductRequest productRequest) {
+                                           @RequestBody ProductRequest productRequest){
+        String updateProductId = productService.updateProduct(productId, productRequest);
 
-        String updatedProductId = productService.updateProduct(productId, productRequest);
         HttpHeaders headers = new HttpHeaders();
-
-        headers.add("Location", "/api/product/" + updatedProductId);
+        headers.add("Location", "/api/product/" + updateProductId);
         return new ResponseEntity<>(headers, HttpStatus.NO_CONTENT);
     }
 
     @DeleteMapping("/{productId}")
     public ResponseEntity<?> deleteProduct(@PathVariable("productId") String productId){
-        productService.deleteProduct(productId);
+        productService.deleteProduct((productId));
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

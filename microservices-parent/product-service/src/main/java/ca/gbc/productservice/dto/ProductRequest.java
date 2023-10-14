@@ -1,5 +1,6 @@
 package ca.gbc.productservice.dto;
 
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,7 +13,6 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @Builder
 public class ProductRequest {
-
     private String name;
     private String description;
     private BigDecimal price;
