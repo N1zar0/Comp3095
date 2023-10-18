@@ -8,4 +8,5 @@ public interface ProductRepository extends MongoRepository<Product, String> {
 
     @DeleteQuery
     void deleteById(String productId);
+
 }

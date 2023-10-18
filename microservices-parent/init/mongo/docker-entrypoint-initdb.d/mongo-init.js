@@ -1,7 +1,7 @@
 print('START')
 
 
-db= db.getSiblingDB('product-service');
+db = db.getSiblingDB('product-service');
 
 db.createUser(
     {
@@ -12,4 +12,5 @@ db.createUser(
 );
 
 db.createCollection('user');
+
 print('END');
