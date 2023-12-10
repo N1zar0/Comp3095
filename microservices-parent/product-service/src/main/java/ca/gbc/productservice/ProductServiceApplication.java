@@ -1,6 +1,3 @@
-// Igor Tsyupko
-// ID:101379825
-
 package ca.gbc.productservice;
 
 import org.springframework.boot.SpringApplication;

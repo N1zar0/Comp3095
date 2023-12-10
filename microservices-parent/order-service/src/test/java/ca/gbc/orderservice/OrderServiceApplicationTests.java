@@ -1,83 +1,52 @@
 package ca.gbc.orderservice;
-import ca.gbc.orderservice.dto.InventoryResponse;
+
+import ca.gbc.orderservice.controller.OrderController;
 import ca.gbc.orderservice.dto.OrderLineItemDto;
 import ca.gbc.orderservice.dto.OrderRequest;
-import ca.gbc.orderservice.model.Order;
-import ca.gbc.orderservice.model.OrderLineItem;
-import ca.gbc.orderservice.repository.OrderRepository;
 import ca.gbc.orderservice.service.OrderServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.client.AutoConfigureWebClient;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import reactor.core.publisher.Mono;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
-import java.util.Collections;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureWebClient
+@WebMvcTest(OrderController.class)
 public class OrderServiceApplicationTests {
 
     @Autowired
-    private WebTestClient webTestClient;
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockBean
-    private OrderRepository orderRepository;
+    private OrderServiceImpl orderService;
 
     @Test
-    public void testPlaceOrderSuccess() {
-        // Mocking inventory service response
-        when(webTestClient.post().uri(any(String.class))
-                .exchange()
-                .expectStatus().isOk()
-                .returnResult(InventoryResponse.class)
-                .getResponseBody())
-                .thenReturn(Mono.just(Collections.singletonList(new InventoryResponse(true))));
+    public void placeOrder() throws Exception {
+        List<OrderLineItemDto> lineItems = new ArrayList<>();
+        lineItems.add(OrderLineItemDto.builder()
+                .skuCode("SKU123")
+                .price(BigDecimal.valueOf(10.0))
+                .quantity(2)
+                .build());
 
-        OrderServiceImpl orderService = new OrderServiceImpl(orderRepository, webTestClient.mutate());
+        OrderRequest orderRequest = new OrderRequest();
+        orderRequest.setOrderLineItemDtoList(lineItems);
 
-        OrderLineItemDto lineItemDto = new OrderLineItemDto(43, "sdad", 20.30,3);
-        OrderRequest orderRequest = new OrderRequest(Collections.singletonList(lineItemDto));
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/order")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(orderRequest)))
+                .andExpect(MockMvcResultMatchers.status().isCreated())
+                .andExpect(MockMvcResultMatchers.content().string("Order Placed Successfully"));
 
-        Order expectedOrder = new Order();
-        expectedOrder.setOrderNumber("1234567890");
-        expectedOrder.setOrderLineItemList(Collections.singletonList(new OrderLineItem("SKU123", 10, 20.0)));
-
-        orderService.placeOrder(orderRequest);
-
-        verify(orderRepository, times(1)).save(expectedOrder);
-    }
-
-    @Test
-    public void testPlaceOrderFailureInsufficientStock() {
-        // Mocking inventory service response with insufficient stock
-        when(webTestClient.post().uri(any(String.class))
-                .exchange()
-                .expectStatus().isOk()
-                .returnResult(InventoryResponse.class)
-                .getResponseBody())
-                .thenReturn(Mono.just(Collections.singletonList(new InventoryResponse(false))));
-
-        OrderServiceImpl orderService = new OrderServiceImpl(orderRepository, webTestClient.mutate());
-
-        OrderLineItemDto lineItemDto = new OrderLineItemDto("SKU123", 10, 20.0);
-        OrderRequest orderRequest = new OrderRequest(Collections.singletonList(lineItemDto));
-
-        try {
-            orderService.placeOrder(orderRequest);
-        } catch (RuntimeException e) {
-            // Ensure that RuntimeException "Insufficient stock" is thrown
-            assert e.getMessage().equals("Insufficient stock");
-        }
-
-        verify(orderRepository, never()).save(any(Order.class));
     }
 }

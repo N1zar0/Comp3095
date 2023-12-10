@@ -4,12 +4,15 @@ import ca.gbc.orderservice.dto.InventoryRequest;
 import ca.gbc.orderservice.dto.InventoryResponse;
 import ca.gbc.orderservice.dto.OrderLineItemDto;
 import ca.gbc.orderservice.dto.OrderRequest;
+import ca.gbc.orderservice.events.OrderPlacedEvent;
 import ca.gbc.orderservice.model.OrderLineItem;
 import ca.gbc.orderservice.model.Order;
 import ca.gbc.orderservice.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -17,64 +20,91 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.util.List;
 import java.util.UUID;
 
-import static java.util.stream.Collectors.toList;
-
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class OrderServiceImpl implements OrderService{
 
-        private final OrderRepository orderRepository;
-        private final WebClient.Builder webClientBuilder;
+    private final KafkaTemplate<String, OrderPlacedEvent> kafaTemplate;
+    private final OrderRepository orderRepository;
+    private final WebClient.Builder webClientBuilder;
 
-        @Value("${inventory.service.url}")
-        private String inventoryApiUri;
+    @Value("${inventory.service.url}")
+    private String inventoryApiUri;
 
-        public void placeOrder(OrderRequest orderRequest){
-            Order order = new Order();
-            order.setOrderNumber(UUID.randomUUID().toString());
+    public String placeOrder(OrderRequest orderRequest){
+        Order order = new Order();
+        order.setOrderNumber(UUID.randomUUID().toString());
 
-            List<OrderLineItem> orderLineItems = orderRequest
-                    .getOrderLineItemDtoList()
-                    .stream()
-                    .map(this::mapToDto)
-                    .toList();
+        List<OrderLineItem> orderLineItems = orderRequest
+                .getOrderLineItemDtoList()
+                .stream()
+                .map(this::mapToDto)
+                .toList();
 
-            order.setOrderLineItemList(orderLineItems);
+        order.setOrderLineItemList(orderLineItems);
 
-            List<InventoryRequest> inventoryRequests = order.getOrderLineItemList()
-                    .stream().map(orderLineItem -> InventoryRequest
-                    .builder()
-                    .skuCode(orderLineItem.getSkuCode())
-                    .quantity(orderLineItem.getQuantity())
-                    .build())
-            .toList();
+        List<InventoryRequest> inventoryRequests = order.getOrderLineItemList()
+                .stream().map(orderLineItem -> InventoryRequest
+                        .builder()
+                        .skuCode(orderLineItem.getSkuCode())
+                        .quantity(orderLineItem.getQuantity())
+                        .build())
+                .toList();
 
-            List<InventoryResponse> inventoryResponseList = webClientBuilder.build()
-                    .post()
-                    .uri(inventoryApiUri)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(inventoryRequests)
-                    .retrieve()
-                    .bodyToFlux(InventoryResponse.class)
-                    .collectList()
-                    .block();
-            
-            assert inventoryResponseList != null;
-            boolean allProductsInStock = inventoryResponseList
-                    .stream()
-                    .allMatch(InventoryResponse::isSufficientStock);
+        List<InventoryResponse> inventoryResponseList = webClientBuilder.build()
+                .post()
+                .uri(inventoryApiUri)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(inventoryRequests)
+                .retrieve()
+                .bodyToFlux(InventoryResponse.class)
+                .collectList()
+                .block();
 
-            if(Boolean.TRUE.equals(allProductsInStock)) {
-                orderRepository.save(order);
-            } else {
-                throw new RuntimeException("Insufficient stock");
-            }
+        assert inventoryResponseList != null;
+        boolean allProductsInStock = inventoryResponseList
+                .stream()
+                .allMatch(InventoryResponse::isSufficientStock);
 
+        if(Boolean.TRUE.equals(allProductsInStock)) {
             orderRepository.save(order);
-        }
 
-        private OrderLineItem mapToDto(OrderLineItemDto orderLineItemDto) {
+            kafaTemplate.send("notificationTopic", new OrderPlacedEvent(order.getOrderNumber()));
+
+            return "Order Placed Succesffuly";
+
+        } else {
+            throw new RuntimeException("Insufficient stock");
+        }
+    }
+
+    private Order createOrder(OrderRequest orderRequest) {
+        Order order = new Order();
+        order.setOrderNumber(UUID.randomUUID().toString());
+        order.setOrderLineItemList(orderRequest.getOrderLineItemDtoList().stream().map(this::mapToDto).toList());
+        return order;
+    }
+
+    private List<InventoryRequest> createInventoryRequests(Order order) {
+        return order.getOrderLineItemList().stream()
+                .map(item -> new InventoryRequest(item.getSkuCode(), item.getQuantity()))
+                .toList();
+    }
+
+    private List<InventoryResponse> checkInventory(List<InventoryRequest> inventoryRequests) {
+        return webClientBuilder.build()
+                .post()
+                .uri(inventoryApiUri)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(inventoryRequests)
+                .retrieve()
+                .bodyToFlux(InventoryResponse.class)
+                .collectList()
+                .block();
+    }
+    private OrderLineItem mapToDto(OrderLineItemDto orderLineItemDto) {
             OrderLineItem orderLineItem = new OrderLineItem();
             orderLineItem.setSkuCode(orderLineItemDto.getSkuCode());
             orderLineItem.setPrice(orderLineItemDto.getPrice());
