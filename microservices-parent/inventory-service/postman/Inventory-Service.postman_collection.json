@@ -1,0 +1,19 @@
+{
+	"info": {
+		"_postman_id": "e5315883-1604-4c67-ac3f-4eeea824a608",
+		"name": "Inventory-Service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "29654760",
+		"_collection_link": "https://interstellar-flare-312404.postman.co/workspace/comp3095~c4cec89c-1ec3-4c66-8d5c-216e9647daa6/collection/29654760-e5315883-1604-4c67-ac3f-4eeea824a608?action=share&source=collection_link&creator=29654760"
+	},
+	"item": [
+		{
+			"name": "IsInStock",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		}
+	]
+}
